@@ -12,6 +12,7 @@ export default class Contract<Result = any, Ctx = any> {
   ensure: Ensure<Result, Ctx>[] = []
 
   private invokationResult!: Result
+  private resultSetByRemedy: boolean = false
 
   constructor(ctx: Ctx) {
     this.ctx = ctx
@@ -36,6 +37,7 @@ export default class Contract<Result = any, Ctx = any> {
 
       if (this.remedy) {
         this.invokationResult = this.remedy(this.ctx)
+        this.resultSetByRemedy = true
       }
 
       return
@@ -72,7 +74,11 @@ export default class Contract<Result = any, Ctx = any> {
 
   result(): Result {
     this.runPreconditions()
-    this.invokationResult = this.invoke(this.ctx)
+
+    if (!this.resultSetByRemedy) {
+      this.invokationResult = this.invoke(this.ctx)
+    }
+
     this.runPostonditions()
     return this.invokationResult
   }
