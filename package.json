@@ -1,14 +1,32 @@
 {
   "name": "@thirdshot/contract",
   "version": "0.0.1",
+  "author": "Benjamin Krall",
   "description": "Write JavaScript by following design-by-contract (DBC) principles",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "pub": "yarn build && npm publish --access=public"
   },
   "main": "./dist/contract.js",
-  "author": "Benjamin Krall",
-  "license": "MIT",
+  "homepage": "https://github.com/thirdshot/contract",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thirdshot/contract"
+  },
+  "bugs": {
+    "url": "https://github.com/thirdshot/contract/issues"
+  },
+  "keywords": [
+    "dbyc",
+    "design by contract",
+    "contract"
+  ],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "devDependencies": {
     "typescript": "^4.3.5"
-  }
+  },
+  "license": "MIT"
 }
