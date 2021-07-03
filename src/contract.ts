@@ -78,7 +78,7 @@ export default class Contract<Result = any, Ctx = any> {
     const preconditionsPassed = this.runPreconditions()
 
     if (!preconditionsPassed) {
-      return undefined
+      return this.invokationResult
     }
 
     if (!this.resultSetByRemedy) {
