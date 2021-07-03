@@ -1,0 +1,14 @@
+{
+  "name": "@thirdshot/contract",
+  "version": "0.0.1",
+  "description": "Write JavaScript by following design-by-contract (DBC) principles",
+  "scripts": {
+    "build": "tsc"
+  },
+  "main": "./dist/contract.js",
+  "author": "Benjamin Krall",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^4.3.5"
+  }
+}
