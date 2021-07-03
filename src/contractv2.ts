@@ -1,5 +1,5 @@
 type Require<Ctx> = { msg: string; that: (ctx: Ctx) => boolean }
-type Remedy<Ctx> = (ctx: Ctx) => any
+type Remedy<Ctx> = ((ctx: Ctx) => any) | undefined
 type Invoke<Result, Ctx> = (ctx: Ctx) => Result
 type Ensure<Result, Ctx> = { msg: string; that: (res: Result, ctx: Ctx) => boolean }
 
@@ -7,7 +7,7 @@ export default class Contract<Result = any, Ctx = any> {
   private ctx
   invariants = []
   require: Require<Ctx>[] = []
-  remedy: Remedy<Ctx> = () => null
+  remedy: Remedy<Ctx> = undefined
   invoke!: Invoke<Result, Ctx>
   ensure: Ensure<Result, Ctx>[] = []
 
@@ -33,6 +33,10 @@ export default class Contract<Result = any, Ctx = any> {
         precondnitions: preconditionErrors,
         ctx: this.ctx,
       })
+
+      if (this.remedy) {
+        this.invokationResult = this.remedy(this.ctx)
+      }
 
       return
     }

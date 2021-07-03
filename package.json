@@ -1,13 +1,13 @@
 {
   "name": "@thirdshot/contract",
-  "version": "0.0.1",
+  "version": "0.1.1",
   "author": "Benjamin Krall",
   "description": "Write JavaScript by following design-by-contract (DBC) principles",
   "scripts": {
     "build": "tsc",
     "pub": "yarn build && npm publish --access=public"
   },
-  "main": "./dist/contract.js",
+  "main": "./dist/index.js",
   "homepage": "https://github.com/thirdshot/contract",
   "repository": {
     "type": "git",
