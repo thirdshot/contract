@@ -48,9 +48,10 @@ export default class Contract<Result = any, Ctx = any> {
 
   private runPostonditions() {
     if (this.ensure.length === 0) {
-      throw Error(
-        `contract post-conditions not set. At least 1 post-condition is required and it must be defined before you invoke the contract.`
-      )
+      throw {
+        name: 'PostConditionError',
+        message: 'Post condition not found. At least one contract post condition is required.',
+      }
     }
 
     const postconditionErrors = []
@@ -74,7 +75,7 @@ export default class Contract<Result = any, Ctx = any> {
     }
   }
 
-  result(): Result | undefined {
+  result(): Result {
     const preconditionsPassed = this.runPreconditions()
 
     if (!preconditionsPassed) {
@@ -88,21 +89,4 @@ export default class Contract<Result = any, Ctx = any> {
     this.runPostonditions()
     return this.invokationResult
   }
-}
-
-const addPositiveNumbers = (a: number, b: number) => {
-  const contract = new Contract<number>({ a, b })
-
-  contract.require = [
-    { msg: 'a is a number', that: (ctx) => typeof ctx.a == 'number' },
-    { msg: 'b is a number', that: (ctx) => typeof ctx.b == 'number' },
-  ]
-
-  contract.remedy = () => 0
-
-  contract.invoke = (ctx) => ctx.a + ctx.b
-
-  contract.ensure = [{ msg: 'result is positive', that: (res) => res > 0 }]
-
-  return contract.result()
 }
