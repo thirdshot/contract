@@ -3,6 +3,14 @@ type Remedy<Ctx> = ((ctx: Ctx) => any) | undefined
 type Invoke<Result, Ctx> = (ctx: Ctx) => Result
 type Ensure<Result, Ctx> = { msg: string; that: (res: Result, ctx: Ctx) => boolean }
 
+class PostConditionNotSetError extends Error {
+  constructor() {
+    super()
+    this.message =
+      'ContractPostConditionNotSet: At least 1 post condition is required when defining contracts.'
+  }
+}
+
 export default class Contract<Result = any, Ctx = any> {
   private ctx
   invariants = []
@@ -48,10 +56,7 @@ export default class Contract<Result = any, Ctx = any> {
 
   private runPostonditions() {
     if (this.ensure.length === 0) {
-      throw {
-        name: 'PostConditionError',
-        message: 'Post condition not found. At least one contract post condition is required.',
-      }
+      throw new PostConditionNotSetError()
     }
 
     const postconditionErrors = []
@@ -71,7 +76,7 @@ export default class Contract<Result = any, Ctx = any> {
         ctx: this.ctx,
       })
 
-      throw Error(`contract post-condnitions failed. Check console for more information.`)
+      throw Error(`contract post-conditions failed. Check console for more information.`)
     }
   }
 
