@@ -1,15 +1,9 @@
+import PostConditionNotSetError from './custom-errors/PostConditionNotSetError'
+
 type Require<Ctx> = { msg: string; that: (ctx: Ctx) => boolean }
 type Remedy<Ctx> = ((ctx: Ctx) => any) | undefined
 type Invoke<Result, Ctx> = (ctx: Ctx) => Result
 type Ensure<Result, Ctx> = { msg: string; that: (res: Result, ctx: Ctx) => boolean }
-
-class PostConditionNotSetError extends Error {
-  constructor() {
-    super()
-    this.message =
-      'ContractPostConditionNotSet: At least 1 post condition is required when defining contracts.'
-  }
-}
 
 export default class Contract<Result = any, Ctx = any> {
   private ctx
