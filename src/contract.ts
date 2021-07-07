@@ -3,7 +3,11 @@ import PostConditionNotSetError from './custom-errors/PostConditionNotSetError'
 type Require<Ctx> = { msg: string; that: (ctx: Ctx) => boolean }
 type Remedy<Ctx> = ((ctx: Ctx) => any) | undefined
 type Invoke<Result, Ctx> = (ctx: Ctx) => Result
-type Ensure<Result, Ctx> = { msg: string; that: (res: Result, ctx: Ctx) => boolean }
+type InvokeAsync<Result, Ctx> = (ctx: Ctx) => Promise<Result>
+type Ensure<Result, Ctx> = {
+  msg: string
+  that: (res: Result, ctx: Ctx) => boolean
+}
 
 export default class Contract<Result = any, Ctx = any> {
   private ctx
@@ -11,6 +15,7 @@ export default class Contract<Result = any, Ctx = any> {
   require: Require<Ctx>[] = []
   remedy: Remedy<Ctx> = undefined
   invoke!: Invoke<Result, Ctx>
+  invokeAsync!: InvokeAsync<Result, Ctx>
   ensure: Ensure<Result, Ctx>[] = []
 
   private invokationResult!: Result
@@ -74,7 +79,7 @@ export default class Contract<Result = any, Ctx = any> {
     }
   }
 
-  result(): Result {
+  async result(): Promise<Result> {
     const preconditionsPassed = this.runPreconditions()
 
     if (!preconditionsPassed) {
@@ -82,7 +87,11 @@ export default class Contract<Result = any, Ctx = any> {
     }
 
     if (!this.resultSetByRemedy) {
-      this.invokationResult = this.invoke(this.ctx)
+      if (this.invoke) {
+        this.invokationResult = this.invoke(this.ctx)
+      } else if (this.invokeAsync) {
+        this.invokationResult = await this.invokeAsync(this.ctx)
+      }
     }
 
     this.runPostonditions()
