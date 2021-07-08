@@ -82,19 +82,26 @@ export default class Contract<Result = any, Ctx = any> {
   async result(): Promise<Result> {
     const preconditionsPassed = this.runPreconditions()
 
+    // return early if the preconditions failed
     if (!preconditionsPassed) {
       return this.invokationResult
     }
 
-    if (!this.resultSetByRemedy) {
-      if (this.invoke) {
-        this.invokationResult = this.invoke(this.ctx)
-      } else if (this.invokeAsync) {
-        this.invokationResult = await this.invokeAsync(this.ctx)
-      }
+    // returned early if there the remedy was hit and a value was returned
+    if (this.resultSetByRemedy) {
+      return this.invokationResult
     }
 
-    this.runPostonditions()
-    return this.invokationResult
+    if (this.invoke) {
+      this.invokationResult = this.invoke(this.ctx)
+      this.runPostonditions()
+      return this.invokationResult
+    }
+
+    return await this.invokeAsync(this.ctx).then((res) => {
+      this.invokationResult = res
+      this.runPostonditions()
+      return this.invokationResult
+    })
   }
 }
