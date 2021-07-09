@@ -1,107 +1,110 @@
-import PostConditionNotSetError from './custom-errors/PostConditionNotSetError'
+type Config<Ctx, Result> =
+  | {
+      ctx: Ctx
+      require: { that: (ctx: Ctx) => boolean; [key: string]: any }[]
+      ensure: { that: (result: Result) => boolean; [key: string]: any }[]
+      remedy?: (error: any) => any
+    } & (
+      | {
+          invoke: (ctx: Ctx) => Result
+          invokeAsync?: never
+        }
+      | {
+          invoke?: never
+          invokeAsync: (ctx: Ctx) => Promise<Result>
+        }
+    )
 
-type Require<Ctx> = { msg: string; that: (ctx: Ctx) => boolean }
-type Remedy<Ctx> = ((ctx: Ctx) => any) | undefined
-type Invoke<Result, Ctx> = (ctx: Ctx) => Result
-type InvokeAsync<Result, Ctx> = (ctx: Ctx) => Promise<Result>
-type Ensure<Result, Ctx> = {
-  msg: string
-  that: (res: Result, ctx: Ctx) => boolean
-}
+function contract<Result = any, Ctx = any>(title: string, config: Config<Ctx, Result>) {
+  let result: any
 
-export default class Contract<Result = any, Ctx = any> {
-  private ctx
-  invariants = []
-  require: Require<Ctx>[] = []
-  remedy: Remedy<Ctx> = undefined
-  invoke!: Invoke<Result, Ctx>
-  invokeAsync!: InvokeAsync<Result, Ctx>
-  ensure: Ensure<Result, Ctx>[] = []
+  const preconditions = () => {
+    const failed = []
 
-  private invokationResult!: Result
-  private resultSetByRemedy: boolean = false
-
-  constructor(ctx: Ctx) {
-    this.ctx = ctx
-  }
-
-  private runPreconditions(): boolean {
-    const preconditionErrors = []
-
-    for (const { msg, that } of this.require) {
-      const condition = that(this.ctx)
-
-      if (!condition) {
-        preconditionErrors.push(msg)
-      }
+    for (const { that, ...rest } of config.require) {
+      const check = that(config.ctx)
+      if (!check) failed.push(rest)
     }
 
-    if (preconditionErrors.length > 0) {
-      console.error(`contract pre-conditions failed:`, {
-        precondnitions: preconditionErrors,
-        ctx: this.ctx,
+    if (failed.length > 0) {
+      console.error(title + ': pre-conditions failed', {
+        ctx: config.ctx,
+        preconditions: failed,
       })
 
-      if (this.remedy) {
-        this.invokationResult = this.remedy(this.ctx)
-        this.resultSetByRemedy = true
+      if (config.remedy) {
+        // set the result to the remedy if one is provided
+        result = config.remedy({ preconditionError: failed })
+      } else {
+        throw new Error(title + ': pre-conditions failed')
       }
-
-      return false
     }
 
-    return true
+    // returns true that preconditions passed if theres no errors
+    return failed.length === 0
   }
 
-  private runPostonditions() {
-    if (this.ensure.length === 0) {
-      throw new PostConditionNotSetError()
-    }
+  const postconditions = (res: any) => {
+    const failed = []
 
-    const postconditionErrors = []
-
-    for (const { msg, that } of this.ensure) {
-      const condition = that(this.invokationResult, this.ctx)
-
-      if (!condition) {
-        postconditionErrors.push(msg)
+    for (const { that, ...rest } of config.ensure) {
+      try {
+        that(res)
+      } catch {
+        failed.push(rest)
       }
     }
 
-    if (postconditionErrors.length > 0) {
-      console.error(`contract post-conditions failed:`, {
-        postconditions: postconditionErrors,
-        result: this.invokationResult,
-        ctx: this.ctx,
+    if (failed.length > 0) {
+      console.error(title + ': post-conditions failed', {
+        ctx: config.ctx,
+        postconditions: failed,
+        result: res,
       })
 
-      throw Error(`contract post-conditions failed. Check console for more information.`)
+      if (config.remedy) {
+        // set the result to the remedy if one is provided
+        result = config.remedy(failed)
+      } else {
+        throw new Error(title + ': post-conditions failed')
+      }
     }
+
+    // returns true that postconditions passed if theres no errors
+    return failed.length === 0
   }
 
-  async result(): Promise<Result> {
-    const preconditionsPassed = this.runPreconditions()
+  const preconditionCheck = preconditions()
 
-    // return early if the preconditions failed
-    if (!preconditionsPassed) {
-      return this.invokationResult
-    }
-
-    // returned early if there the remedy was hit and a value was returned
-    if (this.resultSetByRemedy) {
-      return this.invokationResult
-    }
-
-    if (this.invoke) {
-      this.invokationResult = this.invoke(this.ctx)
-      this.runPostonditions()
-      return this.invokationResult
-    }
-
-    return await this.invokeAsync(this.ctx).then((res) => {
-      this.invokationResult = res
-      this.runPostonditions()
-      return this.invokationResult
-    })
+  if (!preconditionCheck) {
+    return result
   }
+
+  if (config?.invokeAsync) {
+    result = config
+      .invokeAsync(config.ctx)
+      .then((res: any) => {
+        const postconditionCheck = postconditions(res)
+
+        if (!postconditionCheck) {
+          return result
+        }
+
+        return res
+      })
+      .catch((error: any) => {
+        // set the result to the remedy if one is provided
+        if (config.remedy) {
+          return config.remedy(error)
+        }
+      })
+  }
+
+  if (config?.invoke) {
+    result = config.invoke(config.ctx)
+  }
+
+  return result
 }
+
+export default contract
