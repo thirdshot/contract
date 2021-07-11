@@ -1,110 +1,193 @@
-type Config<Ctx, Result> =
-  | {
-      ctx: Ctx
-      require: { that: (ctx: Ctx) => boolean; [key: string]: any }[]
-      ensure: { that: (result: Result) => boolean; [key: string]: any }[]
-      remedy?: (error: any) => any
-    } & (
-      | {
-          invoke: (ctx: Ctx) => Result
-          invokeAsync?: never
-        }
-      | {
-          invoke?: never
-          invokeAsync: (ctx: Ctx) => Promise<Result>
-        }
-    )
+class Contract {
+  private ctx: any
 
-function contract<Result = any, Ctx = any>(title: string, config: Config<Ctx, Result>) {
-  let result: any
+  private preconditionsFailed: boolean = false
+  private preconditionErrors: any[] = []
+  private postconditionErrors: any[] = []
+  private remedyHit: boolean = false
 
-  const preconditions = () => {
-    const failed = []
+  result: any = undefined
 
-    for (const { that, ...rest } of config.require) {
-      const check = that(config.ctx)
-      if (!check) failed.push(rest)
-    }
-
-    if (failed.length > 0) {
-      console.error(title + ': pre-conditions failed', {
-        ctx: config.ctx,
-        preconditions: failed,
-      })
-
-      if (config.remedy) {
-        // set the result to the remedy if one is provided
-        result = config.remedy({ preconditionError: failed })
-      } else {
-        throw new Error(title + ': pre-conditions failed')
-      }
-    }
-
-    // returns true that preconditions passed if theres no errors
-    return failed.length === 0
+  constructor(ctx: any) {
+    this.ctx = ctx
   }
 
-  const postconditions = (res: any) => {
-    const failed = []
-
-    for (const { that, ...rest } of config.ensure) {
+  require(preconditions: any) {
+    for (const { that, remedy, ...rest } of preconditions) {
+      // capture any broken contract requirements
       try {
-        that(res)
+        if (that && !that(this.ctx)) {
+          this.preconditionErrors.push(rest)
+
+          if (remedy) {
+            this.remedyHit = true
+            this.result = typeof remedy === 'function' ? remedy(this.ctx) : remedy
+          }
+        }
       } catch {
-        failed.push(rest)
+        this.preconditionErrors.push(rest)
+
+        if (remedy) {
+          this.remedyHit = true
+          this.result = typeof remedy === 'function' ? remedy(this.ctx) : remedy
+        }
+      }
+
+      if (this.remedyHit) {
+        break
       }
     }
 
-    if (failed.length > 0) {
-      console.error(title + ': post-conditions failed', {
-        ctx: config.ctx,
-        postconditions: failed,
-        result: res,
+    if (this.preconditionErrors.length > 0) {
+      this.preconditionsFailed = true
+      console.error('Contract pre-conditions failed:', {
+        ctx: this.ctx,
+        result: this.result,
+        preconditionErrors: this.preconditionErrors,
       })
 
-      if (config.remedy) {
-        // set the result to the remedy if one is provided
-        result = config.remedy(failed)
-      } else {
-        throw new Error(title + ': post-conditions failed')
+      if (!this.remedyHit) {
+        throw new Error('Contract pre-conditions failed. See logs for more information.')
       }
     }
-
-    // returns true that postconditions passed if theres no errors
-    return failed.length === 0
   }
 
-  const preconditionCheck = preconditions()
+  invoke(invokation: (ctx: any) => any) {
+    // don't let any invokations happen if the preconditions have failed
+    if (this.preconditionsFailed || this.remedyHit) {
+      return this.result
+    }
 
-  if (!preconditionCheck) {
-    return result
+    try {
+      this.result = invokation(this.ctx)
+    } catch (error) {
+      console.error('Contract invokation failed:', { ctx: this.ctx })
+
+      if (!this.remedyHit) {
+        throw new Error(error)
+      }
+    }
   }
 
-  if (config?.invokeAsync) {
-    result = config
-      .invokeAsync(config.ctx)
-      .then((res: any) => {
-        const postconditionCheck = postconditions(res)
+  async invokeAsync(invokation: (ctx: any) => Promise<any>) {
+    // don't let any invokations happen if the preconditions have failed
+    if (this.preconditionsFailed || this.remedyHit) {
+      return this.result
+    }
 
-        if (!postconditionCheck) {
-          return result
+    try {
+      this.result = await invokation(this.ctx)
+    } catch (error) {
+      console.error('Contract invokation failed:', { ctx: this.ctx })
+
+      if (!this.remedyHit) {
+        throw new Error(error)
+      }
+    }
+  }
+
+  ensure(postconditions: any) {
+    if (this.remedyHit) {
+      return
+    }
+
+    for (const { that, remedy, ...rest } of postconditions) {
+      // capture any broken contract ensurements
+      try {
+        if (that && !that(this.result, this.ctx)) {
+          this.postconditionErrors.push(rest)
+
+          if (remedy) {
+            this.remedyHit = true
+            this.result = typeof remedy === 'function' ? remedy(this.ctx) : remedy
+          }
         }
+      } catch {
+        this.postconditionErrors.push(rest)
 
-        return res
-      })
-      .catch((error: any) => {
-        // set the result to the remedy if one is provided
-        if (config.remedy) {
-          return config.remedy(error)
+        if (remedy) {
+          this.remedyHit = true
+          this.result = typeof remedy === 'function' ? remedy(this.ctx) : remedy
         }
-      })
-  }
+      }
 
-  if (config?.invoke) {
-    result = config.invoke(config.ctx)
-  }
+      if (this.postconditionErrors.length > 0) {
+        console.error('Contract post-conditions failed:', {
+          ctx: this.ctx,
+          result: this.result,
+          postconditionErrors: this.postconditionErrors,
+        })
 
-  return result
+        if (!this.remedyHit) {
+          throw new Error('Contract post-conditions failed. See logs for more information.')
+        }
+      }
+
+      if (this.remedyHit) {
+        break
+      }
+    }
+  }
 }
 
-export default contract
+////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////
+const add = (a: number, b: number): number => {
+  const contract = new Contract({ a, b })
+
+  contract.require([
+    { that: (ctx: any) => typeof ctx.a === 'number', error: 'a is not a number' },
+    { that: (ctx: any) => typeof ctx.b === 'number', error: 'b is not a number' },
+  ])
+
+  contract.invoke((ctx) => ctx.a + ctx.b)
+
+  contract.ensure([{ that: (res: any) => res > 0, error: 'result not more than 0' }])
+
+  return contract.result
+}
+
+console.log(add(2, 4))
+
+////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////
+const fakeEndpoint = async (ms: number, rejectIt: boolean = false) => {
+  return new Promise((resolve, reject) => {
+    if (rejectIt) setTimeout(() => reject('Something went wrong'), ms)
+
+    setTimeout(() => resolve({ id: 1, name: 'Benjamin' }), ms)
+  })
+}
+
+const getUserById = async (userId: number) => {
+  const contract = new Contract({ userId })
+
+  contract.require([{ that: (ctx: any) => ctx.userId > 0, error: 'userId is not more than 0' }])
+
+  await contract.invokeAsync(() => {
+    const user = fakeEndpoint(1000)
+    return user
+  })
+
+  contract.ensure([
+    {
+      that: (res: any, ctx: any) => res.id === ctx.userId,
+      error: 'the correct user was not returned',
+      // remedy: 'uh oh.',
+    },
+  ])
+
+  return contract.result
+}
+
+;(async () => {
+  console.log(await getUserById(1))
+})()
