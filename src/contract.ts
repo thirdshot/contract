@@ -1,18 +1,42 @@
-class Contract {
-  private ctx: any
+type Precondition<Ctx, Result> = {} & (
+  | {
+      that: (ctx: Ctx) => boolean
+      remedy?: ((state: { ctx: Ctx }) => Result) | Result
+      [key: string]: any
+    }
+  | {
+      remedy: ((state: { ctx: Ctx }) => Result) | Result
+      that?: never
+    }
+)
+
+type Postcondition<Ctx, Result> = {} & (
+  | {
+      that: (result: Result, ctx: Ctx) => boolean
+      remedy?: ((state: { ctx: Ctx }) => Result) | Result
+      [key: string]: any
+    }
+  | {
+      remedy: ((state: { ctx: Ctx }) => Result) | Result
+      that?: never
+    }
+)
+
+class Contract<Ctx, Result> {
+  private ctx: Ctx
 
   private preconditionsFailed: boolean = false
   private preconditionErrors: any[] = []
   private postconditionErrors: any[] = []
   private remedyHit: boolean = false
 
-  result: any = undefined
+  result!: Result
 
-  constructor(ctx: any) {
+  constructor(ctx: Ctx) {
     this.ctx = ctx
   }
 
-  require(preconditions: any) {
+  require(preconditions: Precondition<Ctx, Result>[]) {
     for (const { that, remedy, ...rest } of preconditions) {
       // capture any broken contract requirements
       try {
@@ -21,7 +45,7 @@ class Contract {
 
           if (remedy) {
             this.remedyHit = true
-            this.result = typeof remedy === 'function' ? remedy(this.ctx) : remedy
+            this.result = remedy instanceof Function ? remedy({ ctx: this.ctx }) : remedy
           }
         }
       } catch {
@@ -29,7 +53,7 @@ class Contract {
 
         if (remedy) {
           this.remedyHit = true
-          this.result = typeof remedy === 'function' ? remedy(this.ctx) : remedy
+          this.result = remedy instanceof Function ? remedy({ ctx: this.ctx }) : remedy
         }
       }
 
@@ -52,7 +76,7 @@ class Contract {
     }
   }
 
-  invoke(invokation: (ctx: any) => any) {
+  invoke(invokation: (ctx: Ctx) => Result) {
     // don't let any invokations happen if the preconditions have failed
     if (this.preconditionsFailed || this.remedyHit) {
       return this.result
@@ -69,7 +93,7 @@ class Contract {
     }
   }
 
-  async invokeAsync(invokation: (ctx: any) => Promise<any>) {
+  async invokeAsync(invokation: (ctx: Ctx) => Promise<Result>) {
     // don't let any invokations happen if the preconditions have failed
     if (this.preconditionsFailed || this.remedyHit) {
       return this.result
@@ -86,7 +110,7 @@ class Contract {
     }
   }
 
-  ensure(postconditions: any) {
+  ensure(postconditions: Postcondition<Ctx, Result>[]) {
     if (this.remedyHit) {
       return
     }
@@ -99,7 +123,7 @@ class Contract {
 
           if (remedy) {
             this.remedyHit = true
-            this.result = typeof remedy === 'function' ? remedy(this.ctx) : remedy
+            this.result = remedy instanceof Function ? remedy({ ctx: this.ctx }) : remedy
           }
         }
       } catch {
@@ -107,7 +131,7 @@ class Contract {
 
         if (remedy) {
           this.remedyHit = true
-          this.result = typeof remedy === 'function' ? remedy(this.ctx) : remedy
+          this.result = remedy instanceof Function ? remedy({ ctx: this.ctx }) : remedy
         }
       }
 
@@ -137,16 +161,16 @@ class Contract {
 ////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////
 const add = (a: number, b: number): number => {
-  const contract = new Contract({ a, b })
+  const contract = new Contract<{ a: number; b: number }, number>({ a, b })
 
   contract.require([
-    { that: (ctx: any) => typeof ctx.a === 'number', error: 'a is not a number' },
-    { that: (ctx: any) => typeof ctx.b === 'number', error: 'b is not a number' },
+    { that: (ctx) => typeof ctx.a === 'number', error: 'a is not a number' },
+    { that: (ctx) => typeof ctx.b === 'number', error: 'b is not a number' },
   ])
 
   contract.invoke((ctx) => ctx.a + ctx.b)
 
-  contract.ensure([{ that: (res: any) => res > 0, error: 'result not more than 0' }])
+  contract.ensure([{ that: (res) => res > 0, error: 'result not more than 0' }])
 
   return contract.result
 }
@@ -168,20 +192,19 @@ const fakeEndpoint = async (ms: number, rejectIt: boolean = false) => {
 }
 
 const getUserById = async (userId: number) => {
-  const contract = new Contract({ userId })
+  const contract = new Contract<{ userId: number }, { id: number }>({ userId })
 
   contract.require([{ that: (ctx: any) => ctx.userId > 0, error: 'userId is not more than 0' }])
 
-  await contract.invokeAsync(() => {
-    const user = fakeEndpoint(1000)
-    return user
+  await contract.invokeAsync(async () => {
+    const user = await fakeEndpoint(1000)
+    return user as { id: number }
   })
 
   contract.ensure([
     {
       that: (res: any, ctx: any) => res.id === ctx.userId,
       error: 'the correct user was not returned',
-      // remedy: 'uh oh.',
     },
   ])
 
