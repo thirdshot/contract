@@ -1,155 +1,103 @@
-type Precondition<Ctx, Result> = {} & (
-  | {
-      that: (ctx: Ctx) => boolean
-      remedy?: ((state: { ctx: Ctx }) => Result) | Result
-      [key: string]: any
+interface SyncConfig<Ctx, Result, Fallback> {
+  id?: string
+  ctx: Ctx
+  fallback?:
+    | Fallback
+    | ((internal: {
+        errors: any
+        requireErrors: any
+        ensureErrors: any
+        result: Result
+        ctx: Ctx
+      }) => Fallback)
+  require: ({ that: (ctx: Ctx) => boolean } & Record<string, any>)[]
+  invoke: (ctx: Ctx) => Result
+  ensure: ({ that: (result: Result, ctx: Ctx) => boolean } & Record<string, any>)[]
+}
+
+export function contract<Ctx = any, Result = any, Fallback = any>(
+  config: SyncConfig<Ctx, Result, Fallback>
+): Result | Fallback {
+  const { id = undefined, ctx, fallback = undefined, require = [], invoke, ensure = [] } = config
+
+  let contractName = id ? `"${id}"` : 'contract'
+  let requireErrors: any[] = []
+  let ensureErrors: any[] = []
+  let result!: Result
+
+  // check the preconditions
+  for (const { that, ...rest } of require) {
+    try {
+      const passes = that(ctx)
+      if (!passes) requireErrors.push(rest)
+    } catch {
+      requireErrors.push(rest)
     }
-  | {
-      remedy: ((state: { ctx: Ctx }) => Result) | Result
-      that?: never
-    }
-)
-
-type Postcondition<Ctx, Result> = {} & (
-  | {
-      that: (result: Result, ctx: Ctx) => boolean
-      remedy?: ((state: { ctx: Ctx }) => Result) | Result
-      [key: string]: any
-    }
-  | {
-      remedy: ((state: { ctx: Ctx }) => Result) | Result
-      that?: never
-    }
-)
-
-export default class Contract<Ctx, Result> {
-  private ctx: Ctx
-
-  private preconditionsFailed: boolean = false
-  private preconditionErrors: any[] = []
-  private postconditionErrors: any[] = []
-  private remedyHit: boolean = false
-
-  result!: Result
-
-  constructor(ctx: Ctx) {
-    this.ctx = ctx
   }
 
-  require(preconditions: Precondition<Ctx, Result>[]) {
-    for (const { that, remedy, ...rest } of preconditions) {
-      // capture any broken contract requirements
-      try {
-        if (that && !that(this.ctx)) {
-          this.preconditionErrors.push(rest)
+  // throw error and return if preconditions failed, or return the fallback.
+  if (requireErrors.length > 0) {
+    console.error(`${contractName} pre-conditions were not met.`, {
+      ctx,
+      requireErrors,
+    })
 
-          if (remedy) {
-            this.remedyHit = true
-            this.result = remedy instanceof Function ? remedy({ ctx: this.ctx }) : remedy
-          }
-        }
-      } catch {
-        this.preconditionErrors.push(rest)
-
-        if (remedy) {
-          this.remedyHit = true
-          this.result = remedy instanceof Function ? remedy({ ctx: this.ctx }) : remedy
-        }
-      }
-
-      if (this.remedyHit) {
-        break
-      }
+    if (!fallback) {
+      throw new Error('Contract pre-conditions failed. Check console for more information.')
     }
 
-    if (this.preconditionErrors.length > 0) {
-      this.preconditionsFailed = true
-      console.error('Contract pre-conditions failed:', {
-        ctx: this.ctx,
-        result: this.result,
-        preconditionErrors: this.preconditionErrors,
+    if (fallback instanceof Function) {
+      return fallback({
+        errors: [...requireErrors, ...ensureErrors],
+        requireErrors,
+        ensureErrors,
+        result,
+        ctx,
       })
-
-      if (!this.remedyHit) {
-        throw new Error('Contract pre-conditions failed. See logs for more information.')
-      }
     }
+
+    return fallback
   }
 
-  invoke(invokation: (ctx: Ctx) => Result) {
-    // don't let any invokations happen if the preconditions have failed
-    if (this.preconditionsFailed || this.remedyHit) {
-      return this.result
-    }
+  // invoke the main contracts invokation
+  try {
+    result = invoke(ctx)
+  } catch {}
 
+  // check the postcondtions
+  for (const { that, ...rest } of ensure) {
     try {
-      this.result = invokation(this.ctx)
-    } catch (error) {
-      console.error('Contract invokation failed:', { ctx: this.ctx })
-
-      if (!this.remedyHit) {
-        throw new Error(error)
-      }
+      const passes = that(result, ctx)
+      if (!passes) ensureErrors.push(rest)
+    } catch {
+      ensureErrors.push(rest)
     }
   }
 
-  async invokeAsync(invokation: (ctx: Ctx) => Promise<Result>) {
-    // don't let any invokations happen if the preconditions have failed
-    if (this.preconditionsFailed || this.remedyHit) {
-      return this.result
+  // throw error and return if postconditions failed, or return the fallback.
+  if (ensureErrors.length > 0) {
+    console.error(`${contractName} post-conditions were not met.`, {
+      ctx,
+      result,
+      ensureErrors,
+    })
+
+    if (!fallback) {
+      throw new Error('Contract post-conditions failed. Check console for more information.')
     }
 
-    try {
-      this.result = await invokation(this.ctx)
-    } catch (error) {
-      console.error('Contract invokation failed:', { ctx: this.ctx })
-
-      if (!this.remedyHit) {
-        throw new Error(error)
-      }
+    if (fallback instanceof Function) {
+      return fallback({
+        errors: [...requireErrors, ...ensureErrors],
+        requireErrors,
+        ensureErrors,
+        result,
+        ctx,
+      })
     }
+
+    return fallback
   }
 
-  ensure(postconditions: Postcondition<Ctx, Result>[]) {
-    if (this.remedyHit) {
-      return
-    }
-
-    for (const { that, remedy, ...rest } of postconditions) {
-      // capture any broken contract ensurements
-      try {
-        if (that && !that(this.result, this.ctx)) {
-          this.postconditionErrors.push(rest)
-
-          if (remedy) {
-            this.remedyHit = true
-            this.result = remedy instanceof Function ? remedy({ ctx: this.ctx }) : remedy
-          }
-        }
-      } catch {
-        this.postconditionErrors.push(rest)
-
-        if (remedy) {
-          this.remedyHit = true
-          this.result = remedy instanceof Function ? remedy({ ctx: this.ctx }) : remedy
-        }
-      }
-
-      if (this.postconditionErrors.length > 0) {
-        console.error('Contract post-conditions failed:', {
-          ctx: this.ctx,
-          result: this.result,
-          postconditionErrors: this.postconditionErrors,
-        })
-
-        if (!this.remedyHit) {
-          throw new Error('Contract post-conditions failed. See logs for more information.')
-        }
-      }
-
-      if (this.remedyHit) {
-        break
-      }
-    }
-  }
+  return result
 }

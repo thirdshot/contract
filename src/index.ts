@@ -1,2 +1,2 @@
-import Contract from './contract'
-export { Contract }
+import { contract } from './contract'
+export { contract }
