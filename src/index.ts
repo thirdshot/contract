@@ -1,2 +1,3 @@
 import { contract } from './contract'
-export { contract }
+import { contractAsync } from './contractAsync'
+export { contract, contractAsync }

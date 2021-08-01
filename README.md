@@ -1,10 +1,12 @@
 # Design by Contract
 
-## Example Usage
+## Example: Async Contract
 
 ```js
-function getFileByKey(fileKey) {
-  const file = contract({
+import { contractAsync } from '@thirdshot/contract'
+
+async function getFileByKey(fileKey) {
+  const file = await contractAsync({
     // The contracts optional identifier. Used within error messages.
     id: 'getFileByKey',
 
