@@ -1,18 +1,16 @@
+type Require<Ctx> = ({ that: (ctx: Ctx) => boolean } & Record<string, any>)[]
+type Ensure<Result, Ctx> = ({ that: (result: Result, ctx: Ctx) => boolean } & Record<string, any>)[]
+type FallbackArg<Fallback, Result, Ctx> =
+  | Fallback
+  | ((internal: { errors: any; requireErrors: any; ensureErrors: any; result: Result; ctx: Ctx }) => Fallback)
+
 interface SyncConfig<Ctx, Result, Fallback> {
   id?: string
   ctx: Ctx
-  fallback?:
-    | Fallback
-    | ((internal: {
-        errors: any
-        requireErrors: any
-        ensureErrors: any
-        result: Result
-        ctx: Ctx
-      }) => Fallback)
-  require: ({ that: (ctx: Ctx) => boolean } & Record<string, any>)[]
+  fallback?: FallbackArg<Fallback, Result, Ctx>
+  require: Require<Ctx>
   invoke: (ctx: Ctx) => Result
-  ensure: ({ that: (result: Result, ctx: Ctx) => boolean } & Record<string, any>)[]
+  ensure: Ensure<Result, Ctx>
 }
 
 export function contract<Ctx = any, Result = any, Fallback = any>(
