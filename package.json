@@ -5,6 +5,7 @@
   "description": "Write JavaScript by following design-by-contract (DBC) principles",
   "scripts": {
     "build": "tsc",
+    "dev": "tsc --watch",
     "pub": "npm publish --access=public"
   },
   "main": "./dist/index.js",
