@@ -1,5 +1,5 @@
-type Require<Ctx> = ({ that: (ctx: Ctx) => boolean } & Record<string, any>)[]
-type Ensure<Result, Ctx> = ({ that: (result: Result, ctx: Ctx) => boolean } & Record<string, any>)[]
+type Require<Ctx> = ({ cond: (ctx: Ctx) => boolean } & Record<string, any>)[]
+type Ensure<Result, Ctx> = ({ cond: (result: Result, ctx: Ctx) => boolean } & Record<string, any>)[]
 type FallbackArg<Fallback, Result, Ctx> =
   | Fallback
   | ((internal: { errors: any; requireErrors: any; ensureErrors: any; result: Result; ctx: Ctx }) => Fallback)
@@ -24,9 +24,9 @@ export function contract<Ctx = any, Result = any, Fallback = any>(
   let result!: Result
 
   // check the preconditions
-  for (const { that, ...rest } of require) {
+  for (const { cond, ...rest } of require) {
     try {
-      const passes = that(ctx)
+      const passes = cond(ctx)
       if (!passes) requireErrors.push(rest)
     } catch {
       requireErrors.push(rest)
@@ -63,9 +63,9 @@ export function contract<Ctx = any, Result = any, Fallback = any>(
   } catch {}
 
   // check the postcondtions
-  for (const { that, ...rest } of ensure) {
+  for (const { cond, ...rest } of ensure) {
     try {
-      const passes = that(result, ctx)
+      const passes = cond(result, ctx)
       if (!passes) ensureErrors.push(rest)
     } catch {
       ensureErrors.push(rest)

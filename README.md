@@ -43,7 +43,7 @@ async function getFileByKey(fileKey) {
     // passed to it. Whatever this invokation returns is then passed to the
     // contracts postrequirements. This invokation accepts both sync and async
     // return types.
-    invoke: async (ctx) => api.getFileByKey(ctx.fileKey),
+    invoke: (ctx) => api.getFileByKey(ctx.fileKey),
 
     // The contracts ensure (postconditions) are conditions that must be true
     // about what the invokation returns. If the postconditions are not met the
