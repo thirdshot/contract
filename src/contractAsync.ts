@@ -99,25 +99,3 @@ export async function contractAsync<Ctx = any, Result = any, Fallback = any>(
 
   return result
 }
-
-async function addUser(userId: number) {
-  const user = await contractAsync({
-    ctx: { userId },
-    require: [{ cond: (ctx) => typeof ctx.userId === 'number', error: 'shit not a number' }],
-    fallback: 'shit no',
-    invoke: () => {
-      const res = new Promise((resolve) => {
-        setTimeout(() => resolve({ id: userId + 1, name: 'benjamin' }), 1000)
-      })
-
-      return res
-    },
-    ensure: [{ cond: (res: any, ctx) => res.id === ctx.userId, error: 'shit wrong user' }],
-  })
-
-  console.log(user)
-
-  return user
-}
-
-addUser(3)

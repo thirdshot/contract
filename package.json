@@ -1,6 +1,6 @@
 {
   "name": "@thirdshot/contract",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "author": "Benjamin Krall",
   "description": "Write JavaScript by following design-by-contract (DBC) principles",
   "scripts": {
